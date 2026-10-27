@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: patient-service
+  datasource:
+    url: ${PATIENT_DATABASE_URL}
+    username: ${PATIENT_DB_USER}
+    password: ${PATIENT_DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+healthcare:
+  gateway-url: ${HEALTHCARE_GATEWAY_URL:http://api-gateway:8080}
+  security:
+    jwt-secret: ${JWT_SECRET}
+    field-encryption-key: ${FIELD_ENCRYPTION_KEY}
+    issuer: healthcare-auth
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never

@@ -1,0 +1,10 @@
+CREATE TABLE patient_profile (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL UNIQUE,
+    first_name_enc BYTEA NOT NULL,
+    last_name_enc BYTEA NOT NULL,
+    date_of_birth_enc BYTEA NOT NULL,
+    phone_enc BYTEA NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

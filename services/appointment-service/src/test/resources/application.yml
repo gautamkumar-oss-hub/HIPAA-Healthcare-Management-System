@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:appointment_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    bootstrap-servers: localhost:9092
+healthcare:
+  gateway-url: http://localhost:8080
+  security:
+    jwt-secret: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    field-encryption-key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    issuer: healthcare-auth

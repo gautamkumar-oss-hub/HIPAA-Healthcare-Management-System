@@ -1,0 +1,818 @@
+openapi: 3.1.0
+info:
+  title: Healthcare Management System Gateway API
+  version: 1.0.0
+  description: >-
+    Manually maintained contract for the development gateway. Service
+    implementations remain authoritative; verify behavior against the running
+    application. This API and the local stack are not approved for real PHI.
+servers:
+  - url: http://localhost:8080
+    description: Local development only; plaintext HTTP
+security:
+  - bearerAuth: []
+tags:
+  - name: Authentication
+  - name: Users
+  - name: Patient profiles
+  - name: Appointments
+  - name: Audit
+  - name: Assistant
+paths:
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      security: []
+      summary: Register a patient account
+      description: Public registration always assigns the PATIENT role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationRequest'
+      responses:
+        '200':
+          description: Account registered and tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      security: []
+      summary: Sign in
+      description: Doctors and administrators must enroll and provide a TOTP code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Staff MFA enrollment is required
+  /api/auth/refresh:
+    post:
+      tags: [Authentication]
+      security: []
+      summary: Rotate refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: New access and refresh tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoke a refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Refresh token revoked
+  /api/auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get the authenticated user's identity
+      responses:
+        '200':
+          description: Current identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/mfa/enroll:
+    post:
+      tags: [Authentication]
+      security: []
+      summary: Start TOTP enrollment
+      description: Re-authenticates with email and password; protect the returned URI.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaCredentials'
+      responses:
+        '200':
+          description: Provisioning URI for an authenticator application
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [provisioningUri]
+                properties:
+                  provisioningUri:
+                    type: string
+                    format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/auth/mfa/verify:
+    post:
+      tags: [Authentication]
+      security: []
+      summary: Verify and enable TOTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaVerification'
+      responses:
+        '200':
+          description: MFA enabled
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/users:
+    get:
+      tags: [Users]
+      summary: List user accounts
+      description: Administrator only.
+      responses:
+        '200':
+          description: User summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSummary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Users]
+      summary: Create a user account
+      description: Administrator only. Password policy requires 12-128 characters with upper, lower, numeric, and symbol characters.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '200':
+          description: Created user summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/auth/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UuidPath'
+    get:
+      tags: [Users]
+      summary: Get a user account
+      description: Administrator only.
+      responses:
+        '200':
+          description: User summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Users]
+      summary: Delete a user account
+      description: Administrator only; an administrator cannot delete their own account.
+      responses:
+        '200':
+          description: Account deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/patients/me:
+    get:
+      tags: [Patient profiles]
+      summary: Get the patient's own profile
+      description: Patient only.
+      responses:
+        '200':
+          description: Decrypted profile returned to its owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientProfile'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Patient profiles]
+      summary: Create or replace the patient's own profile
+      description: Patient only. Sensitive profile fields are encrypted in storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientProfileInput'
+      responses:
+        '200':
+          description: Saved profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Patient profiles]
+      summary: Delete the patient's own profile
+      description: Patient only.
+      responses:
+        '200':
+          description: Profile deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/patients/{patientId}:
+    parameters:
+      - name: patientId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Patient profiles]
+      summary: Get an assigned patient's minimum-necessary summary
+      description: Doctor only; the doctor must have a booked appointment with this patient.
+      responses:
+        '200':
+          description: Assigned patient summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignedPatientSummary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/appointments/availability:
+    get:
+      tags: [Appointments]
+      summary: Browse available appointment slots
+      description: Patient only. Defaults to the next 30 days; requested range is capped at 90 days.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Available slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Appointments]
+      summary: Create appointment availability
+      description: Doctors may create only their own slots. Administrators must specify a doctorId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailabilityRequest'
+      responses:
+        '200':
+          description: Created slot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/appointments:
+    post:
+      tags: [Appointments]
+      summary: Book an available slot
+      description: Patient only. The slot is locked and checked for availability before booking.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookRequest'
+      responses:
+        '200':
+          description: Booked appointment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/appointments/me:
+    get:
+      tags: [Appointments]
+      summary: List appointments visible to the caller
+      description: Patients see their appointments, doctors their schedule, and administrators appointment slots.
+      responses:
+        '200':
+          description: Caller-scoped appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Appointment'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/appointments/assigned/{patientId}:
+    parameters:
+      - name: patientId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Appointments]
+      summary: Verify a patient's assignment to the caller
+      description: Doctor only. Used by the patient service to enforce assigned-patient access.
+      responses:
+        '200':
+          description: Whether the doctor has a booked appointment with the patient
+          content:
+            application/json:
+              schema:
+                type: boolean
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/appointments/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/UuidPath'
+    post:
+      tags: [Appointments]
+      summary: Cancel a booked appointment
+      description: Patient or assigned doctor may cancel their appointment; administrator may cancel any.
+      responses:
+        '200':
+          description: Cancelled appointment returned to available status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/appointments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UuidPath'
+    delete:
+      tags: [Appointments]
+      summary: Delete an unbooked availability slot
+      description: Doctor may delete their own slot; administrator may delete any. Booked appointments cannot be deleted.
+      responses:
+        '200':
+          description: Slot deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/appointments/{id}/reschedule:
+    parameters:
+      - $ref: '#/components/parameters/UuidPath'
+    post:
+      tags: [Appointments]
+      summary: Reschedule the caller's booked appointment
+      description: Patient only. The target slot must be available.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookRequest'
+      responses:
+        '200':
+          description: Replacement appointment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/audit:
+    get:
+      tags: [Audit]
+      summary: List audit records
+      description: Administrator only. Page size is limited to 100. Returned identifiers are decrypted.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Spring Data page of audit records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditRecord'
+                  totalElements:
+                    type: integer
+                  totalPages:
+                    type: integer
+                  number:
+                    type: integer
+                  size:
+                    type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/ai/chat:
+    post:
+      tags: [Assistant]
+      summary: Ask the role-aware local assistant
+      description: Requires caller token; context requests are made on behalf of that caller. Not for medical advice.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+      responses:
+        '200':
+          description: Assistant response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Backend healthcare service unavailable
+  /api/ai/health:
+    get:
+      tags: [Assistant]
+      security: []
+      summary: Assistant liveness check
+      responses:
+        '200':
+          description: Service is responding
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    const: ok
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    UuidPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Request validation or input range error
+    Unauthorized:
+      description: Authentication is required or credentials are invalid
+    Forbidden:
+      description: Caller does not have permission for this operation
+    NotFound:
+      description: Resource not found or not visible to caller
+    Conflict:
+      description: Request conflicts with current resource or account state
+  schemas:
+    RegistrationRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        password:
+          type: string
+          maxLength: 128
+        mfaCode:
+          type: string
+          minLength: 6
+          maxLength: 6
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+    TokenResponse:
+      type: object
+      required: [accessToken, refreshToken, expiresAt, role]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        role:
+          $ref: '#/components/schemas/UserRole'
+    CurrentUser:
+      type: object
+      required: [id, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/UserRole'
+    MfaCredentials:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    MfaVerification:
+      allOf:
+        - $ref: '#/components/schemas/MfaCredentials'
+        - type: object
+          required: [code]
+          properties:
+            code:
+              type: string
+              minLength: 6
+              maxLength: 6
+    UserRole:
+      type: string
+      enum: [PATIENT, DOCTOR, ADMIN]
+    UserSummary:
+      type: object
+      required: [id, email, role, mfaEnabled]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        mfaEnabled:
+          type: boolean
+    CreateUserRequest:
+      type: object
+      required: [email, password, role]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+        role:
+          $ref: '#/components/schemas/UserRole'
+    PatientProfileInput:
+      type: object
+      required: [firstName, lastName, dateOfBirth, phone]
+      properties:
+        firstName:
+          type: string
+          maxLength: 80
+        lastName:
+          type: string
+          maxLength: 80
+        dateOfBirth:
+          type: string
+          format: date
+          description: Must be in the past.
+        phone:
+          type: string
+          pattern: '^[+]?[0-9 ()-]{7,20}$'
+    PatientProfile:
+      allOf:
+        - $ref: '#/components/schemas/PatientProfileInput'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              format: uuid
+    AssignedPatientSummary:
+      type: object
+      required: [patientId, firstName, lastName, dateOfBirth]
+      properties:
+        patientId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+    AvailabilityRequest:
+      type: object
+      required: [startAt, endAt]
+      properties:
+        startAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        doctorId:
+          type: string
+          format: uuid
+          description: Required for administrators; doctors may omit or specify their own ID.
+    BookRequest:
+      type: object
+      required: [slotId]
+      properties:
+        slotId:
+          type: string
+          format: uuid
+    Appointment:
+      type: object
+      required: [id, doctorId, startAt, endAt, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        doctorId:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Included for doctors; omitted as null for patients and administrators.
+        startAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [AVAILABLE, BOOKED]
+    AuditRecord:
+      type: object
+      required: [eventId, userId, role, action, resourceType, resourceId, occurredAt]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        role:
+          type: string
+        action:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        conversation_id:
+          type: string
+          format: uuid
+          nullable: true
+    ChatResponse:
+      type: object
+      required: [answer, conversation_id, role]
+      properties:
+        answer:
+          type: string
+        conversation_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [PATIENT, DOCTOR, ADMIN]

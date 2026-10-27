@@ -1,0 +1,20 @@
+CREATE TABLE app_user (
+    id UUID PRIMARY KEY,
+    email VARCHAR(320) NOT NULL UNIQUE,
+    password_hash VARCHAR(100) NOT NULL,
+    role VARCHAR(16) NOT NULL CHECK (role IN ('PATIENT', 'DOCTOR', 'ADMIN')),
+    mfa_secret BYTEA,
+    mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE refresh_token (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    revoked_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX refresh_token_user_id_idx ON refresh_token(user_id);

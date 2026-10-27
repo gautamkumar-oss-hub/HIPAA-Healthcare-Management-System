@@ -1,0 +1,95 @@
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      url: ${REDIS_URL}
+  cloud:
+    gateway:
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 60
+            redis-rate-limiter.burstCapacity: 100
+            redis-rate-limiter.requestedTokens: 1
+            key-resolver: "#{@gatewayKeyResolver}"
+      routes:
+        - id: patient-health
+          uri: http://patient-service:8082
+          predicates:
+            - Path=/api/patients/actuator/**
+          filters:
+            - StripPrefix=2
+        - id: auth-service
+          uri: http://auth-service:8081
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=2
+        - id: patient-service
+          uri: http://patient-service:8082
+          predicates:
+            - Path=/api/patients/**
+          filters:
+            - StripPrefix=1
+        - id: appointment-health
+          uri: http://appointment-service:8083
+          predicates:
+            - Path=/api/appointments/actuator/**
+          filters:
+            - StripPrefix=2
+        - id: appointment-service
+          uri: http://appointment-service:8083
+          predicates:
+            - Path=/api/appointments/**
+          filters:
+            - StripPrefix=1
+        - id: notification-health
+          uri: http://notification-service:8084
+          predicates:
+            - Path=/api/notifications/actuator/**
+          filters:
+            - StripPrefix=2
+        - id: notification-service
+          uri: http://notification-service:8084
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=1
+        - id: audit-health
+          uri: http://audit-service:8085
+          predicates:
+            - Path=/api/audit/actuator/**
+          filters:
+            - StripPrefix=2
+        - id: ai-health
+          uri: http://ai-agent-service:8000
+          predicates:
+            - Path=/api/ai/health
+          filters:
+            - StripPrefix=2
+        - id: ai-agent-service
+          uri: http://ai-agent-service:8000
+          predicates:
+            - Path=/api/ai/**
+          filters:
+            - StripPrefix=2
+        - id: audit-service
+          uri: http://audit-service:8085
+          predicates:
+            - Path=/api/audit/**
+          filters:
+            - StripPrefix=1
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+healthcare:
+  security:
+    jwt-secret: ${JWT_SECRET}
+    issuer: healthcare-auth
